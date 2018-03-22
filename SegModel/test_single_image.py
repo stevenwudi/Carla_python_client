@@ -7,7 +7,7 @@ import sys
 import cv2
 
 import torch
-from torchvision import transforms
+
 from torch.autograd import Variable
 
 from SegModel import drn
@@ -73,31 +73,10 @@ def parse_args():
     return args
 
 
-def test_single_image(image, MINI_WINDOW_HEIGHT, MINI_WINDOW_WIDTH):
-    # argument parsing
-    args = parse_args()
-
-    # Information contains mean and std
-    info = json.load(open('./SegModel/info.json', 'r'))
-
-    data_transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize(mean=info['mean'], std=info['std'])
-    ])
+def test_single_image(image, model, data_transform, MINI_WINDOW_HEIGHT, MINI_WINDOW_WIDTH):
 
     image = data_transform(image)
     image = image.unsqueeze(0)
-
-    # model definition
-    single_model = DRNSeg(args.arch, args.classes, pretrained_model=None, pretrained=False)
-
-    # Load pretrained weights
-    checkpoint = torch.load(args.pretrained)
-    single_model.load_state_dict(checkpoint)
-
-    model = torch.nn.DataParallel(single_model).cuda()
-    model.eval()
-
     image_var = Variable(image, requires_grad=False, volatile=True)
     final = model(image_var)[0]
     _, pred = torch.max(final, 1)

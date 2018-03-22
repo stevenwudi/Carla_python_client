@@ -28,13 +28,17 @@ STARTING in a moment...
 from __future__ import print_function
 
 import argparse
+import json
 import logging
 import random
 import time
 
-from SegModel.test_single_image import test_single_image
-from lane_detection.lane_detection import lane_detection
-from matplotlib import pyplot as plt
+import torch
+# DRN
+from torchvision import transforms
+
+from SegModel.DRN import DRNSeg
+from SegModel.test_single_image import test_single_image, parse_args
 
 try:
     import pygame
@@ -64,7 +68,6 @@ from carla.planner.map import CarlaMap
 from carla.settings import CarlaSettings
 from carla.tcp import TCPConnectionError
 from carla.util import print_over_same_line
-
 
 WINDOW_WIDTH = 800
 WINDOW_HEIGHT = 600
@@ -143,6 +146,30 @@ class CarlaGame(object):
         self._map_view = self._map.get_map(WINDOW_HEIGHT) if city_name is not None else None
         self._position = None
         self._agent_positions = None
+        # Load DRN and data transform
+        self.model, self.data_transform = self.load_drn_model()
+
+    def load_drn_model(self):
+        # argument parsing
+        args = parse_args()
+
+        # Information contains mean and std
+        info = json.load(open('./SegModel/info.json', 'r'))
+
+        data_transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(mean=info['mean'], std=info['std'])
+        ])
+        # model definition
+        single_model = DRNSeg(args.arch, args.classes, pretrained_model=None, pretrained=False)
+
+        # Load pretrained weights
+        checkpoint = torch.load(args.pretrained)
+        single_model.load_state_dict(checkpoint)
+
+        model = torch.nn.DataParallel(single_model).cuda()
+        model.eval()
+        return model, data_transform
 
     def execute(self):
         """Launch the PyGame."""
@@ -161,7 +188,9 @@ class CarlaGame(object):
     def _initialize_game(self):
         if self._city_name is not None:
             self._display = pygame.display.set_mode(
-                (WINDOW_WIDTH + int((WINDOW_HEIGHT/float(self._map.map_image.shape[0]))*self._map.map_image.shape[1]), WINDOW_HEIGHT),
+                (WINDOW_WIDTH + int(
+                    (WINDOW_HEIGHT / float(self._map.map_image.shape[0])) * self._map.map_image.shape[1]),
+                 WINDOW_HEIGHT),
                 pygame.HWSURFACE | pygame.DOUBLEBUF)
         else:
             self._display = pygame.display.set_mode(
@@ -189,7 +218,8 @@ class CarlaGame(object):
         self._mini_view_image1 = sensor_data['CameraDepth']
         self._mini_view_image2 = sensor_data['CameraSemSeg']
 
-        seg, pred_color = test_single_image(self._main_image.data, MINI_WINDOW_HEIGHT, MINI_WINDOW_WIDTH)
+        seg, pred_color = test_single_image(self._main_image.data, self.model, self.data_transform,
+                                            MINI_WINDOW_HEIGHT, MINI_WINDOW_WIDTH)
         self._pred_color = pred_color
         # lane = lane_detection(self._main_image.data)
 
@@ -222,9 +252,9 @@ class CarlaGame(object):
         # Set the player position
         if self._city_name is not None:
             self._position = self._map.convert_to_pixel([
-                        measurements.player_measurements.transform.location.x,
-                        measurements.player_measurements.transform.location.y,
-                        measurements.player_measurements.transform.location.z])
+                measurements.player_measurements.transform.location.x,
+                measurements.player_measurements.transform.location.y,
+                measurements.player_measurements.transform.location.z])
             self._agent_positions = measurements.non_player_agents
 
         if control is None:
@@ -319,13 +349,13 @@ class CarlaGame(object):
             array = self._map_view
             array = array[:, :, :3]
 
-            new_window_width =(float(WINDOW_HEIGHT)/float(self._map_shape[0]))*float(self._map_shape[1])
+            new_window_width = (float(WINDOW_HEIGHT) / float(self._map_shape[0])) * float(self._map_shape[1])
             surface = pygame.surfarray.make_surface(array.swapaxes(0, 1))
 
-            w_pos = int(self._position[0]*(float(WINDOW_HEIGHT)/float(self._map_shape[0])))
-            h_pos = int(self._position[1] *(new_window_width/float(self._map_shape[1])))
+            w_pos = int(self._position[0] * (float(WINDOW_HEIGHT) / float(self._map_shape[0])))
+            h_pos = int(self._position[1] * (new_window_width / float(self._map_shape[1])))
 
-            pygame.draw.circle(surface, [255, 0, 0, 255], (w_pos,h_pos), 6, 0)
+            pygame.draw.circle(surface, [255, 0, 0, 255], (w_pos, h_pos), 6, 0)
             for agent in self._agent_positions:
                 if agent.HasField('vehicle'):
                     agent_position = self._map.convert_to_pixel([
@@ -333,10 +363,10 @@ class CarlaGame(object):
                         agent.vehicle.transform.location.y,
                         agent.vehicle.transform.location.z])
 
-                    w_pos = int(agent_position[0]*(float(WINDOW_HEIGHT)/float(self._map_shape[0])))
-                    h_pos = int(agent_position[1] *(new_window_width/float(self._map_shape[1])))
+                    w_pos = int(agent_position[0] * (float(WINDOW_HEIGHT) / float(self._map_shape[0])))
+                    h_pos = int(agent_position[1] * (new_window_width / float(self._map_shape[1])))
 
-                    pygame.draw.circle(surface, [255, 0, 255, 255], (w_pos ,h_pos), 4, 0)
+                    pygame.draw.circle(surface, [255, 0, 255, 255], (w_pos, h_pos), 4, 0)
 
             self._display.blit(surface, (WINDOW_WIDTH, 0))
 
