@@ -1,0 +1,13 @@
+# Compiled Python
+*.pyc
+
+# JetBrains IDEs
+.idea
+
+# weights
+*Experiments*
+*.hdf5
+
+
+_benchmarks_results/
+SegModel/drn_d_38_cityscapes.th
