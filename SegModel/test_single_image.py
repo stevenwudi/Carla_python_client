@@ -2,19 +2,16 @@
 # -*- coding: utf-8 -*-
 import os
 import argparse
-import json
 import sys
 import cv2
 
 import torch
-
 from torch.autograd import Variable
 
 from SegModel import drn
-from SegModel.DRN import DRNSeg
 from SegModel.city_scape_info import CITYSCAPE_PALETTE
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '3'
 try:
     from modules import batchnormsync
 except ImportError:
@@ -83,7 +80,6 @@ def test_single_image(image, model, data_transform, MINI_WINDOW_HEIGHT, MINI_WIN
     pred = pred.cpu().data.numpy()
 
     pred_resize = cv2.resize(pred[0].astype('uint8'), (MINI_WINDOW_WIDTH, MINI_WINDOW_HEIGHT), interpolation=cv2.INTER_NEAREST)
-
     pred_color = CITYSCAPE_PALETTE[pred_resize.squeeze()]
     return pred[0], pred_color
 

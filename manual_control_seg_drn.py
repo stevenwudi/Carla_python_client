@@ -81,8 +81,8 @@ def make_carla_settings():
     settings.set(
         SynchronousMode=False,
         SendNonPlayerAgentsInfo=True,
-        NumberOfVehicles=15,
-        NumberOfPedestrians=30,
+        NumberOfVehicles=80,
+        NumberOfPedestrians=120,
         WeatherId=random.choice([1, 3, 7, 8, 14]))
     settings.randomize_seeds()
     camera0 = sensor.Camera('CameraRGB')
@@ -146,6 +146,7 @@ class CarlaGame(object):
         self._map_view = self._map.get_map(WINDOW_HEIGHT) if city_name is not None else None
         self._position = None
         self._agent_positions = None
+        self.auto_pilot = False
         # Load DRN and data transform
         self.model, self.data_transform = self.load_drn_model()
 
@@ -260,6 +261,9 @@ class CarlaGame(object):
         if control is None:
             self._on_new_episode()
         else:
+            if self.auto_pilot:
+                control = measurements.player_measurements.autopilot_control
+
             self.client.send_control(control)
 
     def _get_keyboard_control(self, keys):
